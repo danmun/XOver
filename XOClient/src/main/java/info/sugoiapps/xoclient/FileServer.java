@@ -23,6 +23,7 @@ import java.net.Socket;
  */
 public class FileServer extends SwingWorker<Void,Void> {
     
+    private static final int BUFFER_SIZE = 65536;
     private static final int PORT = 24999;
     private static ServerSocket server;
     private ProgressGUI progress;
@@ -52,32 +53,33 @@ public class FileServer extends SwingWorker<Void,Void> {
      * @throws IOException can be thrown during connection failures and write errors
      */
     public void download() throws IOException {
-        int bytesRead;
         while(true){
             Socket clientSocket = null;  
             clientSocket = server.accept();  
-           
-            InputStream in = clientSocket.getInputStream();  
-           
+            clientSocket.setTcpNoDelay(true);
+            
+            InputStream in = clientSocket.getInputStream();
+            
+            //DataInputStream only used to receive file information, not actual file contents
             DataInputStream clientData = new DataInputStream(in);   
            
             String filename = clientData.readUTF();
-            OutputStream output = new FileOutputStream(filename);     
+            OutputStream output = new FileOutputStream(filename);
+            displayProgress(filename);
+            
             long size = clientData.readLong();
             filesize = (int) size;
-            System.out.println("filesize is " + filesize + ", and the long version received is " + size);
-            displayProgress(filename);
-            System.out.println("filesize received is " + filesize + " bytes");
+            
+            byte[] buffer = new byte[BUFFER_SIZE];
+            int read;
             int downloaded = 0;
-            byte[] buffer = new byte[1024];     
-            while (size > 0 && (bytesRead = clientData.read(buffer, 0, (int)Math.min(buffer.length, size))) != -1){
+            
+            while ((read = in.read(buffer)) != -1){
                 progress.setProgress(getProgress(downloaded));
-                output.write(buffer, 0, bytesRead);     
-                size -= bytesRead;  
-                downloaded += bytesRead;
+                output.write(buffer, 0, read);
+                downloaded += read;
             }
             disposeProgress();
-            
             // Closing the FileOutputStream handle
             in.close();
             clientData.close();
